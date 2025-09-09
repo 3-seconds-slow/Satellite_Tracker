@@ -1,10 +1,13 @@
+import json
 from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-
-
 class Base(DeclarativeBase):
     pass
+
+'''
+Ok, so I was trying to find a way 
+'''
 
 class Satellite(Base):
     __tablename__ = 'Satellite'
@@ -27,4 +30,13 @@ class Satellite(Base):
     BSTAR:Mapped[float]
     MEAN_MOTION_DOT:Mapped[float]
     MEAN_MOTION_DDOT:Mapped[float]
+
+    #raw_json:Mapped[str]
+
     updated:Mapped[datetime]
+
+    # def set_raw_json(self, data: dict):
+    #     self.raw_json = json.dumps(data)
+    #
+    # def get_raw_json(self) -> dict:
+    #     return json.loads(self.raw_json) if self.raw_json else {}

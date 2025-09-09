@@ -7,10 +7,10 @@ class PandasModel(QAbstractTableModel):
         self._df = df
 
     def rowCount(self, parent=None):
-        return len(self._df)
+        return self._df.shape[0]
 
     def columnCount(self, parent=None):
-        return len(self._df.columns)
+        return self._df.shape[1]
 
     def data(self, index, role=Qt.DisplayRole):
         if index.isValid() and role == Qt.DisplayRole:
@@ -24,3 +24,9 @@ class PandasModel(QAbstractTableModel):
             if orientation == Qt.Vertical:
                 return str(section)
         return None
+
+    def updateData(self, new_df: pd.DataFrame):
+        """"Replace the DataFrame and notify the view that data changed."""
+        self.beginResetModel()
+        self._df = new_df
+        self.endResetModel()

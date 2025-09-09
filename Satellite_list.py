@@ -1,13 +1,23 @@
 import Download_data
 import Database
+import pandas as pd
 from Models.Pandas_model import PandasModel
+from Models.Proxy_model import ProxyModel
 from PySide6.QtCore import QSortFilterProxyModel, Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableView
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableView, QDialog
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-# data = []
+from Models.Proxy_model import ProxyModel
+
+# data = pd.DataFrame([
+#     [4, 9, 2],
+#     [1, 0, 0],
+#     [3, 5, 0],
+#     [3, 3, 2],
+#     [7, 8, 9],
+# ], columns = ['A', 'B', 'C'], index=['Row 1', 'Row 2', 'Row 3', 'Row 4', 'Row 5'])
 
 '''
 This is the main interface for the satellite tracker.
@@ -19,8 +29,9 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
         df = [["OBJECT_ID", "OBJECT_NAME", "updated"]]
-        model = PandasModel(Database.get_satellite_list())
         satellites_df = Database.get_satellite_list()
+        self.model = PandasModel(satellites_df)
+
         self.setWindowTitle("Satellite Tracker")
         self.setGeometry(100, 100, 800, 400)
 
@@ -34,9 +45,12 @@ class App(QWidget):
         # the table_layout contains a table for
         table_layout = QVBoxLayout()
         # Search box
+
+        self.table = QTableView()
+
         # Proxy model (adds sorting & filtering)
-        self.proxy_model = QSortFilterProxyModel(self)
-        self.proxy_model.setSourceModel(model)
+        self.proxy_model = ProxyModel()
+        self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
         self.proxy_model.setFilterKeyColumn(-1)  # search all columns
 
@@ -44,15 +58,29 @@ class App(QWidget):
         self.search_box.setPlaceholderText("Search satellites...")
         self.search_box.textChanged.connect(self.proxy_model.setFilterFixedString)
 
-        # Table view
-        self.table_view = QTableView()
-        self.table_view.setModel(self.proxy_model)
-        self.table_view.setSortingEnabled(True)
-        self.table_view.resizeColumnsToContents()
+        self.table.setSortingEnabled(True)
+        self.table.setModel(self.proxy_model)
+
 
         table_layout.addWidget(self.search_box)
-        table_layout.addWidget(self.table_view)
-        self.setLayout(table_layout)
+        table_layout.addWidget(self.table)
+
+
+        #
+        # # Table view
+        # self.table_view = QTableView()
+        # self.table_view.setModel(self.proxy_model)
+        # self.table_view.setSortingEnabled(True)
+        # self.table_view.resizeColumnsToContents()
+        #
+        # table_layout.addWidget(self.search_box)
+        # table_layout.addWidget(self.table_view)
+        # self.setLayout(table_layout)
+
+
+
+
+
         # left_widget = QWidget()
         # left_layout = QVBoxLayout(left_widget)
         # self.search_bar = QLineEdit()
@@ -90,6 +118,11 @@ class App(QWidget):
         # self.update_table()
         # self.update_chart()
 
+    def refresh_table(self):
+        print("Refreshing table")
+        satellites_df = Database.get_satellite_list()
+        self.model.updateData(satellites_df)
+
     # def update_table(self):
     #     filter_text = self.search_bar.text().lower()
     #     self.table.setRowCount(0)
@@ -113,6 +146,7 @@ class App(QWidget):
     def download_data(self):
         dlg = Download_data.DownloadData(self)
         if dlg.exec():
+            self.refresh_table()
             print("Success!")
         else:
             print("Cancel!")

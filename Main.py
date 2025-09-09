@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication
 import sys
 
 
-testing = True
+testing = False
 db_filename = "Satellite_data"
 
 if __name__ == "__main__":

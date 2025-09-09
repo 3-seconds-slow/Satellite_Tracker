@@ -42,7 +42,15 @@ class DownloadData(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Download Failed", f"Error: {e}")
 
-        Database.save(response.json())
+        try:
+            Database.save(response.json())
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Error saving data: {e}")
+            return
+
+        # ✅ Show success message and close dialog after user clicks OK
+        QMessageBox.information(self, "Success", "Data downloaded and saved!")
+        self.accept()  # closes the dialog with QDialog.Accepted
 
 
     def getData(self, searchField, searchTerm):

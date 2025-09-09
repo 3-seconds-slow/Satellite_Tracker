@@ -41,6 +41,7 @@ def save(response):
                 MEAN_MOTION_DDOT=sat["MEAN_MOTION_DDOT"],
                 updated=datetime.now()
             )
+            #satellite.set_raw_json(sat)
             session.merge(satellite)
         session.commit()
         print("✅ Satellites saved to database")
@@ -55,7 +56,8 @@ def get_satellite_list():
             for sat in satellites
         ]
         satellites_df = pd.DataFrame(data)
-        print(satellites_df)
+
+        # print(satellites_df)
         return satellites_df
 
 
