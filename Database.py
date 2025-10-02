@@ -1,10 +1,12 @@
 import pandas as pd
+from skyfield.api import EarthSatellite, load
 from Models.Database_models import Base, Satellite
 from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 engine = None
+ts = load.timescale()
 
 def create_database(db_filename, testing: bool = False):
     global engine
@@ -23,25 +25,8 @@ def save(response):
         for sat in response:
             satellite = Satellite(
                 OBJECT_ID=sat["OBJECT_ID"],
-                OBJECT_NAME=sat["OBJECT_NAME"],
-                EPOCH=sat["EPOCH"],
-                MEAN_MOTION=sat["MEAN_MOTION"],
-                ECCENTRICITY=sat["ECCENTRICITY"],
-                INCLINATION=sat["INCLINATION"],
-                RA_OF_ASC_NODE=sat["RA_OF_ASC_NODE"],
-                ARG_OF_PERICENTER=sat["ARG_OF_PERICENTER"],
-                MEAN_ANOMALY=sat["MEAN_ANOMALY"],
-                EPHEMERIS_TYPE=sat["EPHEMERIS_TYPE"],
-                CLASSIFICATION_TYPE=sat["CLASSIFICATION_TYPE"],
-                NORAD_CAT_ID=sat["NORAD_CAT_ID"],
-                ELEMENT_SET_NO=sat["ELEMENT_SET_NO"],
-                REV_AT_EPOCH=sat["REV_AT_EPOCH"],
-                BSTAR=sat["BSTAR"],
-                MEAN_MOTION_DOT=sat["MEAN_MOTION_DOT"],
-                MEAN_MOTION_DDOT=sat["MEAN_MOTION_DDOT"],
-                updated=datetime.now()
             )
-            #satellite.set_raw_json(sat)
+            satellite.set_raw_json(sat)
             session.merge(satellite)
         session.commit()
         print("✅ Satellites saved to database")
@@ -49,15 +34,15 @@ def save(response):
 # retrieves all the satellite data from the database and returns pandas dataframes for all satellites
 def get_satellite_list():
     session = sessionmaker(bind=engine)
+    satellites = []
     with session.begin() as session:
-        satellites = session.query(Satellite).all()
-        data = [
-            {column.name: getattr(sat, column.name) for column in Satellite.__table__.columns}
-            for sat in satellites
-        ]
-        satellites_df = pd.DataFrame(data)
+        for sat in session.query(Satellite).all():
+            raw_json = sat.get_raw_json()
+            esat = EarthSatellite.from_omm(ts, raw_json)
+            satellites.append(esat)
 
-        # print(satellites_df)
-        return satellites_df
+        print('Loaded', len(satellites), 'satellites')
+        print(satellites)
+        return satellites
 
 
