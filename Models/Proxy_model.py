@@ -1,19 +1,39 @@
-from Models.Pandas_model import PandasModel
-from PySide6.QtCore import QSortFilterProxyModel, Qt
+from Models.Table_model import SkyfieldSatelliteModel
+from PySide6.QtCore import QSortFilterProxyModel, Qt, Signal, QTimer
+from skyfield.api import wgs84, load
 
+ts = load.timescale()
 
 class ProxyModel(QSortFilterProxyModel):
+    satellites_changed = Signal()
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._visible_columns = ["OBJECT_ID", "OBJECT_NAME", "updated"]
+        self.observer = None
 
-    def setVisibleColumns(self, columns):
-        self._visible_columns = columns
-        self.invalidateFilter()  # Re-apply filter
+    def setFilterFixedString(self, pattern: str):
+        super().setFilterFixedString(pattern)
+        print("Emitting signal 3")
+        QTimer.singleShot(2000, self.satellites_changed.emit)
 
-    def filterAcceptsColumn(self, source_column, source_parent):
-        source_model = self.sourceModel()
-        if isinstance(source_model, PandasModel):
-            column_name = source_model.headerData(source_column, Qt.Horizontal)
-            return column_name in self._visible_columns
-        return True
+    def setObserver(self, lat=None, lon=None):
+        """Enable/disable location filter."""
+        if lat is not None and lon is not None:
+            self.observer = wgs84.latlon(lat, lon)
+            print("Obeserver set")
+        else:
+            self.observer = None
+        self.invalidateFilter()
+        QTimer.singleShot(2000, self.satellites_changed.emit)
+
+    # def filterAcceptsRow(self, source_row, source_parent):
+    #     super().filterAcceptsRow(source_row, source_parent)
+    #     # print("filtering")
+    #     self.observer = wgs84.latlon(lat, lon)
+    #     sat = model.satellites[source_row]  # your model stores EarthSatellite objects
+    #     difference = sat - self.observer
+    #     topocentric = difference.at(ts.now())
+    #     alt, az, dist = topocentric.altaz()
+    #     if alt.degrees <= 0:
+    #         return False
+    #
+    #     return True

@@ -1,5 +1,6 @@
 import Satellite_list
 import Database
+import webview
 from PySide6.QtWidgets import QApplication
 import sys
 
@@ -12,5 +13,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = Satellite_list.App()
     window.show()
+    webview.start(gui="qt", debug=True)
     sys.exit(app.exec())
 
