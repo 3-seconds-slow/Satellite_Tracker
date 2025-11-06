@@ -1,13 +1,10 @@
-import pandas as pd
 from skyfield.api import EarthSatellite, load
-from skyfield.iokit import parse_tle_file
 from Models.Database_models import Base, Satellite
 from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from itertools import islice
-from io import BytesIO, StringIO
+from io import BytesIO
 
 engine = None
 satellite_lookup = {}

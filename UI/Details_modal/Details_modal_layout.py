@@ -133,10 +133,3 @@ def create_details_modal():
             ]),
         ],
     )
-
-# def create_details_stores():
-#     """Stores for double-click detection."""
-#     return [
-#         dcc.Store(id="last-clicked-row", data={"index": None, "timestamp": 0}),
-#         dcc.Store(id="open-details-trigger", data=0)
-#     ]

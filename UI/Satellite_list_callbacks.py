@@ -40,7 +40,10 @@ def register_home_screen_callbacks(app):
         prevent_initial_call=False
     )
     def render_chart_content(selected_tab, table_data, filtered_data, active_cell, _):
+        """
 
+
+        """
         selected_sat = None
         filtered_data = filtered_data or table_data or []
         # print("building charts:")
