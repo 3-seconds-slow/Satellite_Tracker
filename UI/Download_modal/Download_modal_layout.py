@@ -1,8 +1,3 @@
-# import requests
-# from Models import Database
-# from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QGridLayout, QDialogButtonBox, QComboBox, \
-#     QLabel, QMessageBox
-
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 

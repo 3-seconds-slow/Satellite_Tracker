@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from dash import Input, Output, State
 from dash.exceptions import PreventUpdate
 from Models.Database import save

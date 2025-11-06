@@ -61,7 +61,7 @@ def create_home_screen(satellites):
                                          {"name": "Latitude", "id": "LAT"},
                                          {"name": "Longitude", "id": "LON"},
                                          {"name": "Altitude", "id": "ALT"},
-                                         {"name": "Last Updated", "id": "updated"}],
+                                         ],
                                 data=data,
                                 filter_action="native",
                                 sort_action="native",

@@ -1,8 +1,6 @@
-import webview
 from dash import Input, Output, State, dcc
 from dash.exceptions import PreventUpdate
 from Models.Database import get_satellite_data
-import json
 
 
 def register_export_modal_callbacks(app):

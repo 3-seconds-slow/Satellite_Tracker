@@ -54,7 +54,7 @@ def run_dash():
     app = dash.Dash(__name__)
     app.layout = create_home_screen(satellites)
 
-    register_home_screen_callbacks(app, satellites)
+    register_home_screen_callbacks(app)
     register_download_modal_callbacks(app)
     register_details_modal_callbacks(app)
     register_import_modal_callbacks(app)
