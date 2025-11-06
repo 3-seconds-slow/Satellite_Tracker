@@ -1,0 +1,45 @@
+/* Base Tabs Container */
+.chart-tabs {
+    border-bottom: 1px solid #444;
+    font-family: "Segoe UI", sans-serif;
+}
+
+/* Default tab look */
+.chart-tab {
+    padding: 10px 18px !important;
+    background-color: #111 !important;
+    color: #bbb !important;
+    border: 1px solid #333 !important;
+    border-bottom: none !important;
+    margin-right: 4px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+/* Hover state */
+.chart-tab:hover {
+    background-color: #1a1a1a !important;
+    color: #fff !important;
+    cursor: pointer;
+}
+
+/* Active tab */
+.chart-tab--selected {
+    background-color: #0d6efd !important;   /* Bootstrap primary blue */
+    color: #ffffff !important;
+    border-color: #0d6efd #0d6efd #111 !important;
+    font-weight: 600;
+}
+
+/* Style Dash DatePicker to match Bootstrap dark inputs */
+.DateInput_input {
+    /*background-color: #222 !important;*/
+    color: #e9ecef !important;
+    /*border: 1px solid #444 !important;*/
+    /*border-radius: .375rem !important; !* Bootstrap default *!*/
+    padding: 6px 10px !important;
+    font-size: 14px;
+    height: 38px; /* match dbc.Input height */
+}
+
+
