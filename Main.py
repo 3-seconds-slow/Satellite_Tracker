@@ -47,7 +47,7 @@ def run_dash():
     Initiates the dash app
 
     Loads satellites from the database into memory, creates the home screen of the program and registers all the
-    callback functions so they can be access from their respective screens or modals.
+    callback functions so they can be accessed from their respective screens or modals.
 
     """
     satellites = get_satellite_list()

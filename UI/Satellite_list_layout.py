@@ -162,22 +162,29 @@ def create_home_screen(satellites):
                             dcc.Tab(
                                 label="Globe",
                                 value="globe-tab",
+                                children=[
+                                    dcc.Loading(
+                                        type="circle",
+                                        children=html.Div(id="globe-container")
+                                    ),],
                                 className="chart-tab",
                                 selected_className="chart-tab--selected"
                             ),
                             dcc.Tab(
                                 label="Map",
                                 value="map-tab",
+                                children=[
+                                    dcc.Loading(
+                                        type="circle",
+                                        children=html.Div(id="map-container")
+                                    ),],
                                 className="chart-tab",
                                 selected_className="chart-tab--selected"
                             ),
                         ],
                         style={"marginBottom": "10px"}
                     ),
-                    dcc.Loading(
-                        type="circle",
-                        children=html.Div(id="chart-content")
-                    )
+
                 ])
             ], width=8, style={"paddingLeft": "10px"})
         ], className="gx-2 gy-3"),
