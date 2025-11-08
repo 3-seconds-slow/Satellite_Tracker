@@ -4,7 +4,10 @@ import dash_daq as daq
 import pytz
 
 def create_details_modal():
-    """Return the modal layout for satellite details."""
+    """
+    Creates the layout for the details modal
+    :return: HTML describing the details modal
+    """
     return dbc.Modal(
         id="satellite-details-modal",
         is_open=False,
@@ -91,25 +94,6 @@ def create_details_modal():
                     ],
                 ),
                 html.Div(id="predicted-position", className="mt-3", style={"textAlign": "center"}),
-
-                # html.Div([
-                #     html.Span("Position at:", style={"fontWeight": "600"}),
-                #     dcc.DatePickerSingle(id="predict-date"),
-                #     dbc.Input(id="predict-time", type="text", placeholder="HH:MM"),
-                #     dbc.Select(
-                #         id="predict-timezone",
-                #         options=pytz.common_timezones,
-                #         value="UTC",
-                #     ),
-                #     dbc.Button("Predict", id="predict-btn", color="primary"),
-                #     html.Div(id="predicted-position", className="mt-2"),
-                #     daq.BooleanSwitch(
-                #         id="path-switch",
-                #         on=False,
-                #         label="Show satellite path",
-                #         labelPosition="bottom"
-                #     )
-                # ]),
 
                 html.Hr(),
 

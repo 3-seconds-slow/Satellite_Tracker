@@ -10,7 +10,10 @@ from Visualisations import Map_Component, Globe_Component
 ts = load.timescale()
 
 def register_details_modal_callbacks(app):
-    """Attach all callbacks related to the details modal."""
+    """
+    registers details modal callbacks
+    :param app: the dash instance these callback will run in
+    """
 
     @app.callback(
         Output("satellite-details-modal", "is_open"),
@@ -29,7 +32,19 @@ def register_details_modal_callbacks(app):
         State("observer-lon", "value"),
         State("satellite-details-modal", "is_open"),
     )
-    def show_satellite_details(event, table_data, active_cell, lat_from_main_screen, lon_from_main_screen, is_open):
+    def show_satellite_details(event, table_data, active_cell, lat_from_main_screen, lon_from_main_screen):
+        """
+        When the details modal is opened, this function builds the details display and the visualisations. It also gets
+        any latitude and longitude values from the inputs on the home screen to calculate visibility.
+
+        :param event: the output of the event listener for detecting a double click in the table. this signal triggers
+        the modal opening
+        :param table_data: the data from the home screen satellite table
+        :param active_cell: the currently selected cell of the table
+        :param lat_from_main_screen: the latitude value from the input on the home screen
+        :param lon_from_main_screen: the longitude value from the input on the home screen
+        :return:
+        """
         print(f"double click detected at: {event}")
         if not event:
             raise PreventUpdate
@@ -43,46 +58,18 @@ def register_details_modal_callbacks(app):
 
         selected_sat = table_data[row_index]
 
-        print(f"index: {row_index}, satellite: {selected_sat}")
+        # print(f"index: {row_index}, satellite: {selected_sat}")
 
-
-    # --- Open modal and populate details ---
         lookup = get_satellite_lookup()
         sat_obj = lookup[selected_sat["OBJECT_ID"]]
-        t = ts.now()
-        geocentric = sat_obj.at(t)
-        subpoint = wgs84.subpoint(geocentric)
 
-        lat = round(subpoint.latitude.degrees, 3)
-        lon = round(subpoint.longitude.degrees, 3)
-        alt = round(subpoint.elevation.km, 2)
-
-        # Compute visibility from a fixed location (e.g. Sydney)
-        # observer = wgs84.latlon(-33.8688, 151.2093)
-        # difference = sat_obj - observer
-        # topocentric = difference.at(t)
-        # altitude, azimuth, distance = topocentric.altaz()
-        # visibility = "Visible" if altitude.degrees > 0 else "Below Horizon"
-
-        # Generate charts
         map_chart = Map_Component.create_map_chart([selected_sat], selected_sat)
         globe_chart = Globe_Component.create_globe_chart([selected_sat], selected_sat)
 
-        computed = {
-            "lat": lat,
-            "lon": lon,
-            "alt": alt,
-            "map_chart": map_chart,
-            "globe_chart": globe_chart
-        }
-
         auto_calc = lat_from_main_screen is not None and lon_from_main_screen is not None
-        print(f"auto_calc = {auto_calc}")
+        # print(f"auto_calc = {auto_calc}")
 
-        details = build_satellite_details_layout(
-            sat_obj,
-            computed,
-        )
+        details = build_satellite_details_layout(sat_obj)
 
         return (True,
                 selected_sat["OBJECT_ID"],
@@ -101,7 +88,11 @@ def register_details_modal_callbacks(app):
         Input("close-details-modal", "n_clicks"),
         prevent_initial_call=True
     )
-    def close_details(_):
+    def close_details(n_close_clicks):
+        """
+        Closes the details modal
+        :param n_close_clicks: n_click property of the close modal button
+        """
         return False
 
     @app.callback(
@@ -114,18 +105,25 @@ def register_details_modal_callbacks(app):
         prevent_initial_call=True
     )
     def calculate_visibility(n_clicks, is_open, lat, lon, sat_id):
+        """
+        Calculates whether a selected satellite is visible from a user defined location.
+
+        :param n_clicks: property used to detect the calculate position button has been clicked
+        :param is_open: bool indicating if the modal is open or closed
+        :param lat: the value from the latitude input. Should be an int or float
+        :param lon: the value from the longitude input. Should be an int or float
+        :param sat_id: the id number of the selected satellite
+        :return: an HTML component that displays the visibility of the selected satellite
+        """
         from skyfield.api import wgs84, load
         ts = load.timescale()
 
-        # Only trigger when modal opens or user clicks "Calculate"
         if not ctx.triggered_id:
             raise PreventUpdate
 
-        # Don’t run on modal close
         if ctx.triggered_id == "satellite-details-modal" and not is_open:
             raise PreventUpdate
 
-        # Validate input
         if lat is None or lon is None:
             return html.Span("Enter coordinates", style={"color": "#aaa"})
 
@@ -134,7 +132,6 @@ def register_details_modal_callbacks(app):
 
         lookup = get_satellite_lookup()
         sat_obj = lookup[sat_id]
-        # Compute visibility
         observer = wgs84.latlon(lat, lon)
         t = ts.now()
         topocentric = (sat_obj - observer).at(t)
@@ -161,37 +158,46 @@ def register_details_modal_callbacks(app):
         prevent_initial_call=True
     )
     def predict_future_position(n_clicks, date_str, time_str, timezone, sat_id, globe_fig, map_fig):
-        print("callback triggered")
+        """
+        Calculates the position the selected satellite will be at user entered time in the future.
+
+        The predicted latitude, longitude and altitude will be displayed within the details modal, and a new marker
+        will be added to the  map and globe components.
+
+        :param n_clicks: property used to detect the prediction button hs been clicked
+        :param date_str: a sting representing a date from the date picker component
+        :param time_str: a string representing the time entered into the time input
+        :param timezone: the vale from the timezone dropdown
+        :param sat_id: the id number of the selected satellite
+        :param globe_fig: the 3d globe visualisation component
+        :param map_fig: the 2d map visualisation component
+        :return: an HTML component that displays the predicted position of the selected satellite, the map component,
+        the globe component, and a datetime object containing the date and time entered by the user
+        """
+        # print("callback triggered")
         if not n_clicks or not date_str or not time_str or not sat_id:
             raise PreventUpdate
 
-        # try:
-        # --- Combine date and time into datetime ---
         dt_str = f"{date_str}T{time_str}:00Z"
         dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
-        print(dt)
+        # print(dt)
         dt = pytz.timezone(timezone).localize(dt)
-        print(dt)
-
-        # --- Skyfield time conversion ---
+        # print(dt)
         t = ts.utc(dt)
 
-        # --- Lookup satellite ---
         lookup = get_satellite_lookup()
         sat = lookup.get(sat_id)
         if not sat:
             return html.Span("Satellite not found.", style={"color": "orange"}), globe_fig, map_fig
 
-        # --- Compute predicted position ---
         geocentric = sat.at(t)
         subpoint = wgs84.subpoint(geocentric)
 
         lat = subpoint.latitude.degrees
         lon = subpoint.longitude.degrees
         alt = subpoint.elevation.km
-        print(f"new position: {lat}, {lon}, {alt}")
+        # print(f"new position: {lat}, {lon}, {alt}")
 
-        # --- Build result text ---
         result_text = html.Div([
             html.H6("Predicted Position:"),
             html.P([
@@ -203,24 +209,11 @@ def register_details_modal_callbacks(app):
             ])
         ])
 
-        # --- Update the charts (optional marker) ---
         globe_fig = Globe_Component.update_prediction_marker(globe_fig, sat_id, dt)
         map_fig = Map_Component.update_prediction_marker(map_fig, sat_id, dt)
-        # if globe_fig:
-        #     globe_fig["data"][2]["x"] = [geocentric.position.km[0]]
-        #     globe_fig["data"][2]["y"] = [geocentric.position.km[1]]
-        #     globe_fig["data"][2]["z"] = [geocentric.position.km[2]]
-        #     globe_fig["data"][2]["text"] = [f"Predicted @ {dt_str}"]
-        #
-        # if map_fig:
-        #     map_fig["data"][2]["lat"] = [lat]
-        #     map_fig["data"][2]["lon"] = [lon]
-        #     map_fig["data"][2]["text"] = [f"Predicted @ {dt_str}"]
 
         return result_text, globe_fig, map_fig, dt
 
-        # except Exception as e:
-        #     return html.Span(f"Error: {e}", style={"color": "red"}), globe_fig, map_fig
 
     @app.callback(
         Output("globe-graph", "figure", allow_duplicate=True),
@@ -233,6 +226,18 @@ def register_details_modal_callbacks(app):
         prevent_initial_call=True
     )
     def show_path(path_switch, globe_fig, map_fig, sat_id, prediction_datetime):
+        """
+        When the show path toggle is clicked, this function will calculate the satellites predicted position for every
+        minute between now and the datetime entered by the user and add them to a list. A marker will be placed on the
+        globe and map for every position in the list, plotting the satellite's path.
+
+        :param path_switch: the value of the display path the toggle switch
+        :param globe_fig: the 3d globe visualisation component
+        :param map_fig: the 2d map visualisation component
+        :param sat_id: the id number of the selected satellite
+        :param prediction_datetime: the datetime entered by the user
+        :return: the map component and the globe component
+        """
         if path_switch:
             if not prediction_datetime:
                 prediction_datetime = datetime.now().astimezone()
@@ -252,9 +257,25 @@ def register_details_modal_callbacks(app):
 
         return globe_fig, map_fig
 
+    """
+    TODO: fix this so it adjusts to different sized screens
+    """
+    def build_satellite_details_layout(sat_obj):
+        """
+        Builds an HTML component which displays the details of the selected satellite, including calculating its current
+        position.
 
-    def build_satellite_details_layout(sat_obj, computed, auto_calc=False):
-        """Return a clean TLE-style layout for satellite details."""
+        :param sat_obj: the selected EarthSatellite object
+        :return: an HTML component
+        """
+        t = ts.now()
+        geocentric = sat_obj.at(t)
+        subpoint = wgs84.subpoint(geocentric)
+
+        lat = round(subpoint.latitude.degrees, 3)
+        lon = round(subpoint.longitude.degrees, 3)
+        alt = round(subpoint.elevation.km, 2)
+
         return html.Div(
             style={
                 "padding": "15px",
@@ -263,16 +284,6 @@ def register_details_modal_callbacks(app):
                 "borderRadius": "8px",
             },
             children=[
-                # html.H3(
-                #     f"Satellite Details {sat_obj.name}",
-                #     style={
-                #         "textAlign": "center",
-                #         "marginBottom": "20px",
-                #         "fontWeight": "bold",
-                #         "color": "#2a9df4"
-                #     }
-                # ),
-
                 dbc.Row([
                     build_field("NORAD catalog number", sat_obj.model.satnum),
                 ], justify="center"),
@@ -332,16 +343,22 @@ def register_details_modal_callbacks(app):
                 html.Div([
                     html.H5("Current Position", style={"color": "#2a9df4"}),
                     dbc.Row([
-                        dbc.Col(build_field("Latitude (°)", computed["lat"]), width=3),
-                        dbc.Col(build_field("Longitude (°)", computed["lon"]), width=3),
-                        dbc.Col(build_field("Altitude (km)", computed["alt"]), width=3),
+                        dbc.Col(build_field("Latitude (°)", lat), width=3),
+                        dbc.Col(build_field("Longitude (°)", lon), width=3),
+                        dbc.Col(build_field("Altitude (km)", alt), width=3),
                     ])
                 ], style={"textAlign": "center"}),
             ]
         )
 
     def build_field(label, value):
-        """Reusable helper for value-over-label display."""
+        """
+        Builds and populates a field for the satellite details display component
+
+        :param label: the name of the field being built
+        :param value: the value of the field
+        :return: an HTML component
+        """
         return html.Div(
             style={"marginBottom": "12px", "textAlign": "center"},
             children=[
