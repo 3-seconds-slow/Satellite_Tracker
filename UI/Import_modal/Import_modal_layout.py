@@ -1,7 +1,15 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 def create_import_modal():
+    """
+    Describes the layout of the import file modal
+    """
+    logger.info("building import modal layout")
     return dbc.Modal(
         id="import-modal",
         is_open=False,
@@ -26,7 +34,10 @@ def create_import_modal():
                     multiple=False
                 ),
 
-                html.Div(id="import-status", className="mt-3", style={"color": "#ddd"}),
+                html.Progress(id="import-progress-bar", value="0", style={"visibility": "hidden", "justify": "center"}),
+                dbc.Alert(id="import-status-text", color="info", is_open=False),
+
+                dbc.Button("Cancel", id="cancel-import-btn", className="w-100 mb-3"),
             ]),
             dbc.ModalFooter([
                 dbc.Button("Close", id="close-import-modal", color="secondary")

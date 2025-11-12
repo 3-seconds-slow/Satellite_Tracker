@@ -6,6 +6,13 @@ from UI.Download_modal.Download_modal_layout import create_download_modal
 from UI.Details_modal.Details_modal_layout import create_details_modal
 from UI.Import_modal.Import_modal_layout import create_import_modal
 from UI.Export_modal.Export_modal_layout import create_export_modal
+from UI.Delete_modal.Delete_modal_layout import create_delete_modal
+from Visualisations.Map_Component import create_map_chart
+from Visualisations.Globe_Component import create_globe_chart
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 def create_home_screen(satellites):
     """
@@ -17,9 +24,13 @@ def create_home_screen(satellites):
     :param satellites: a list of EarthSatellite objects loaded from the database
     :return: the html describing the appearance of the program's home screen
     """
-    global satellite_lookup
+
+    logging.info("populating table")
     data = satellites_to_table_data(satellites)
-    satellite_lookup = {sat.model.satnum: sat for sat in satellites}
+    logger.info("generating charts")
+    globe = create_globe_chart()
+    map = create_map_chart()
+    logging.info("building home screen layout")
     return html.Div([
         dcc.Store(id="db-refresh-signal", data=0),
         dcc.Store(id="selected-sat-id", data=None),
@@ -37,10 +48,16 @@ def create_home_screen(satellites):
                         "Clear Selected",
                         id="clear-selection-btn",
                         className="btn btn-secondary"),
-                    html.Button(
-                        "Update Records",
-                        id="update-records-btn",
-                        className="btn btn-secondary"),
+                    # html.Button(
+                    #     "Update Records",
+                    #     id="update-records-btn",
+                    #     className="btn btn-secondary"),
+                    dbc.Button(
+                        "Delete all Satellites",
+                        id="open-delete-modal",
+                        className="btn btn-secondary",
+                    ),
+                    create_delete_modal()
                 ]),
 
                 dcc.Loading(
@@ -61,6 +78,7 @@ def create_home_screen(satellites):
                                          {"name": "Latitude", "id": "LAT"},
                                          {"name": "Longitude", "id": "LON"},
                                          {"name": "Altitude", "id": "ALT"},
+                                         {"name": "epoch", "id": "EPOCH"},
                                          ],
                                 data=data,
                                 filter_action="native",
@@ -86,7 +104,12 @@ def create_home_screen(satellites):
                                     "fontSize": "14px",
                                 },
                                 style_data_conditional=[
-                                    # Highlight selected row
+                                    {
+                                        "if": {"filter_query": "{STALE} = 'true'"},
+                                        "backgroundColor": "#7c0000",
+                                        "color": "white",
+                                        "border": "1px solid #aa0000"
+                                    },
                                     {
                                         "if": {"state": "active"},
                                         "backgroundColor": "#2a9df4",
@@ -105,7 +128,7 @@ def create_home_screen(satellites):
 
                     ],
                 ),
-            ], width=4, style={"paddingRight": "10px"}),
+            ], width=6, style={"paddingRight": "10px"}),
             dbc.Col([
                 html.Div(
                     className="d-flex gap-2 align-items-end mb-3",
@@ -162,26 +185,45 @@ def create_home_screen(satellites):
                             dcc.Tab(
                                 label="Globe",
                                 value="globe-tab",
+                                children=[
+                                    dcc.Loading(
+                                        type="circle",
+                                        children=dcc.Graph(
+                                            id="globe-graph",
+                                            figure=globe,
+                                            config={"displayModeBar": True, "scrollZoom": True},
+                                            style={"height": "600px"}
+                                        )
+                                    ),],
                                 className="chart-tab",
                                 selected_className="chart-tab--selected"
                             ),
                             dcc.Tab(
                                 label="Map",
                                 value="map-tab",
+                                children=[
+                                    dcc.Loading(
+                                        type="circle",
+                                        children=dcc.Graph(
+                                            id="map-graph",
+                                            figure=map,
+                                            config={"displayModeBar": True, "scrollZoom": True},
+                                            style={"height": "600px"}
+                                        )
+                                    ),],
                                 className="chart-tab",
                                 selected_className="chart-tab--selected"
                             ),
                         ],
                         style={"marginBottom": "10px"}
                     ),
-                    dcc.Loading(
-                        type="circle",
-                        children=html.Div(id="chart-content")
-                    )
+
                 ])
-            ], width=8, style={"paddingLeft": "10px"})
+            ], width=6, style={"paddingLeft": "10px"})
         ], className="gx-2 gy-3"),
     ]),
+
+
 
 
 
