@@ -1,9 +1,12 @@
-from dash import Input, Output, State, html, no_update, ctx
+from dash import Input, Output, State, no_update, ctx
 from skyfield.api import load, wgs84
 from Models.Database import get_satellite_list
 from Visualisations import Map_Component, Globe_Component
+import logging
 
 ts = load.timescale()
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 def register_home_screen_callbacks(app):
     """
@@ -13,55 +16,25 @@ def register_home_screen_callbacks(app):
     """
     @app.callback(
         Output("satellite-table", "data"),
-        Input("db-refresh-signal", "data")
+        Output("satellite-table", "derived_virtual_data"),
+        Input("db-refresh-signal", "data"),
+        prevent_initial_call=True
+
     )
-    def refresh_table(_):
+    def refresh_table(db_refresh_signal):
         """
         reloads the data table when a change in the database has be detected
 
-        :param _: the data within the db-refresh-signal store, which is updated when the database changes
+        :param db_refresh_signal: the data within the db-refresh-signal store, which is updated when the database changes
         :return: a list containing the data to be displayed within the table
         """
-        # print("refreshing table")
+        logger.info("refreshing table")
         satellites = get_satellite_list()
+        # print(satellites)
         data = satellites_to_table_data(satellites)
 
-        return data
+        return data, None
 
-    """
-    TODO: figure out why this callback is being triggered twice during startup. Suspect I don't the filtered data
-    """
-    @app.callback(
-        Output("globe-container", "children"),
-        Output("map-container", "children"),
-        [
-            Input("satellite-table", "data"),
-            Input("satellite-table", "derived_virtual_data"),
-            Input("satellite-table", "active_cell"),
-        ],
-        prevent_initial_call=False
-    )
-    def render_chart_content(table_data, filtered_data, active_cell):
-        """
-        Sends the table data to the map and globe components when the program opens so the carts can be built
-
-        :param table_data: all the data contained in the unfiltered table
-        :param filtered_data: the currently visible data from when the table is filtered
-        :param active_cell: the currently selected cell of the table
-        :return: two plotly graph objects, 3d globe and 2d map
-        """
-        selected_sat = None
-        filtered_data = filtered_data or table_data or []
-        # print("building charts:")
-        if active_cell and filtered_data:
-            row_index = active_cell.get("row")
-            if 0 <= row_index < len(filtered_data):
-                selected_sat = filtered_data[row_index]
-
-        globe_chart = Globe_Component.create_globe_chart(filtered_data, selected_sat)
-        map_chart = Map_Component.create_map_chart(filtered_data, selected_sat)
-
-        return globe_chart, map_chart
 
     """
     TODO: Separate the regular marker and selected satellite marker updates into separate callbacks
@@ -70,11 +43,13 @@ def register_home_screen_callbacks(app):
         Output("map-graph", "figure"),
         Output("globe-graph", "figure"),
         Input("satellite-table", "active_cell"),
+        Input("satellite-table", "derived_virtual_data"),
         State("map-graph", "figure"),
         State("globe-graph", "figure"),
-        State("satellite-table", "derived_virtual_data")
+        State("satellite-table", "data"),
+
     )
-    def update_satellite_positions(active_cell, map_fig, globe_fig, filtered_data):
+    def update_satellite_positions(active_cell, filtered_data, map_fig, globe_fig, data):
         """
         Update the satellite markers on the charts whenever the table data is changed, either through database updates
         or the table being filtered
@@ -84,26 +59,29 @@ def register_home_screen_callbacks(app):
         :param map_fig: the 2d map component
         :param globe_fig: the 3d map component
         :param filtered_data: the currently visible data from when the table is filtered
+        :param data: the complete table data
 
         :return: the updated map and globe components
         """
+        logger.info("updating satellite markers")
         selected_sat = None
+        # print("update_satellite_positions")
+        # print(data)
+        # print(filtered_data)
+        # print(active_cell)
+        data = filtered_data if filtered_data is not None else data
         if active_cell:
             row_index = active_cell.get("row")
             if 0 <= row_index < len(filtered_data):
                 selected_sat = filtered_data[row_index]
+                print(selected_sat)
 
-        if not filtered_data:
-            return no_update, no_update
-
-        globe_fig = Globe_Component.update_markers(globe_fig, filtered_data)
-        map_fig = Map_Component.update_markers(map_fig, filtered_data)
+        globe_fig = Globe_Component.update_markers(globe_fig, data)
+        map_fig = Map_Component.update_markers(map_fig, data)
 
         if selected_sat:
-            globe_fig["data"][2] = None
+            logger.info("updating selected satellite markers")
             globe_fig = Globe_Component.update_selected_marker(globe_fig,selected_sat)
-
-            map_fig["data"][2] = None
             map_fig = Map_Component.update_selected_marker(map_fig, selected_sat)
 
         return map_fig, globe_fig
@@ -112,7 +90,7 @@ def register_home_screen_callbacks(app):
     TODO: ensure latitude and longitude input only accept valid data
     """
     @app.callback(
-        Output("satellite-table", "data", allow_duplicate=True),
+        Output("satellite-table", "derived_virtual_data", allow_duplicate=True),
         [Input("filter-visible-btn", "n_clicks"),
          Input("reset-filter-btn", "n_clicks")],
         State("observer-lat", "value"),
@@ -135,6 +113,7 @@ def register_home_screen_callbacks(app):
         :return: data: a list containing the information of each visible satellite
         """
 
+        logger.info("filtering visible satellites")
         # print("filtering visible satellites")
         if not ctx.triggered or ctx.triggered_id == "reset-filter-btn":
             # print("No filter")
@@ -155,45 +134,64 @@ def register_home_screen_callbacks(app):
 
         data = satellites_to_table_data(visible_sats)
 
+        logger.info("returning visible satellites")
         # print(f"[Filter] {len(visible_sats)} visible out of {len(satellites)}")
         return data
 
-    """
-    TODO: this isn't working, fix this
-    """
+
     @app.callback(
-        Output("satellite-table", "active_cell"),
+        Output("satellite-table", "active_cell", allow_duplicate=True),
+        Output("map-graph", "figure", allow_duplicate=True),
+        Output("globe-graph", "figure",allow_duplicate=True),
         Input("clear-selection-btn", "n_clicks"),
+        State("map-graph", "figure"),
+        State("globe-graph", "figure"),
+        prevent_initial_call=True
     )
-    def clear_selection(n_clicks):
+    def clear_selection(n_clicks, map_fig, globe_fig):
         """
         Clears the current satellite selection
         :param n_clicks: property used to detect the clear selection button has been clicked
+        :param map_fig: the 2d map component
+        :param globe_fig: the 3d map component
         :return: None: sets the active cell property of the data table to None
         """
-        return None
+        logger.info("clearing selection")
+        globe_fig = Globe_Component.clear_selected_marker(globe_fig)
+        map_fig = Map_Component.clear_suggested_marker(map_fig)
+
+        return None, map_fig, globe_fig
 
 
 def satellites_to_table_data(satellites):
     """
-    Takes a list of EarthSatellite objects and returns the data to populate the data table
+    Takes a list of EarthSatellite objects and returns the data to populate the data table.
+    Also flags data that is more than two weeks old, indicating that it should be updated to ensure accuracy
     :param satellites: a list of EarthSatellite objects
     :return: a list of dicts containing the satellite's id, name, latitude, longitude, and altitude
     """
+    logger.info("extracting table data from EarthSatellite objects")
     rows = []
     t = ts.now()
+
     for sat in satellites:
         lat, lon, alt = calculate_position(sat, t)
+        epoch = sat.epoch.utc_datetime()
+        stale = abs(sat.epoch - t) > 14
         rows.append({
             "OBJECT_ID": sat.model.satnum,
             "OBJECT_NAME": sat.name,
             "LAT": lat,
             "LON": lon,
             "ALT": alt,
+            "EPOCH": epoch,
+            "STALE": "true" if stale else "false"
         })
     return rows
+
+
 """
-TODO: use this in all th other places that perform this operation
+TODO: use this in all the other places that perform this operation
 """
 def calculate_position(sat, t = ts.now()):
     """

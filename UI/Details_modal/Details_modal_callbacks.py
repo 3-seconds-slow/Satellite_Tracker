@@ -1,13 +1,18 @@
-from datetime import datetime
-import pytz
-from dash import Input, Output, State, html, dcc, ctx
+from datetime import datetime, timedelta
+import pytz, logging
+from dash import Input, Output, State, html, ctx, no_update
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
 from skyfield.api import wgs84, load
+import pandas as pd
 from Models.Database import get_satellite_lookup
 from Visualisations import Map_Component, Globe_Component
 
 ts = load.timescale()
+ephemeris_path = "assets/de421.bsp"
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 def register_details_modal_callbacks(app):
     """
@@ -23,8 +28,8 @@ def register_details_modal_callbacks(app):
         Output("details-lat-input", "value"),
         Output("details-lon-input", "value"),
         Output("details-auto-calc", "data"),
-        Output("details-globe-container", "children"),
-        Output("details-map-container", "children"),
+        Output("details-globe-graph", "figure"),
+        Output("details-map-graph", "figure"),
         Input("table_listener", "event"),
         State("satellite-table", "derived_virtual_data"),
         State("satellite-table", "active_cell"),
@@ -32,7 +37,7 @@ def register_details_modal_callbacks(app):
         State("observer-lon", "value"),
         State("satellite-details-modal", "is_open"),
     )
-    def show_satellite_details(event, table_data, active_cell, lat_from_main_screen, lon_from_main_screen):
+    def show_satellite_details(event, table_data, active_cell, lat_from_main_screen, lon_from_main_screen, is_open):
         """
         When the details modal is opened, this function builds the details display and the visualisations. It also gets
         any latitude and longitude values from the inputs on the home screen to calculate visibility.
@@ -45,12 +50,13 @@ def register_details_modal_callbacks(app):
         :param lon_from_main_screen: the longitude value from the input on the home screen
         :return:
         """
-        print(f"double click detected at: {event}")
+        # print(f"double click detected at: {event}")
         if not event:
             raise PreventUpdate
 
         if not active_cell or not table_data:
             raise PreventUpdate
+
 
         row_index = active_cell.get("row")
         if row_index is None or row_index < 0 or row_index >= len(table_data):
@@ -62,9 +68,12 @@ def register_details_modal_callbacks(app):
 
         lookup = get_satellite_lookup()
         sat_obj = lookup[selected_sat["OBJECT_ID"]]
-
-        map_chart = Map_Component.create_map_chart([selected_sat], selected_sat)
-        globe_chart = Globe_Component.create_globe_chart([selected_sat], selected_sat)
+        logger.info(f"opening details for {sat_obj}")
+        logger.info("building charts")
+        map_chart = Map_Component.create_map_chart()
+        map_chart = Map_Component.update_selected_marker(map_chart, selected_sat)
+        globe_chart = Globe_Component.create_globe_chart()
+        globe_chart = Globe_Component.update_selected_marker(globe_chart, selected_sat)
 
         auto_calc = lat_from_main_screen is not None and lon_from_main_screen is not None
         # print(f"auto_calc = {auto_calc}")
@@ -93,6 +102,7 @@ def register_details_modal_callbacks(app):
         Closes the details modal
         :param n_close_clicks: n_click property of the close modal button
         """
+        logger.info("closing details")
         return False
 
     @app.callback(
@@ -115,9 +125,6 @@ def register_details_modal_callbacks(app):
         :param sat_id: the id number of the selected satellite
         :return: an HTML component that displays the visibility of the selected satellite
         """
-        from skyfield.api import wgs84, load
-        ts = load.timescale()
-
         if not ctx.triggered_id:
             raise PreventUpdate
 
@@ -130,6 +137,7 @@ def register_details_modal_callbacks(app):
         if not sat_id:
             return html.Span("No satellite selected", style={"color": "orange"})
 
+        logger.info("calculating visibility")
         lookup = get_satellite_lookup()
         sat_obj = lookup[sat_id]
         observer = wgs84.latlon(lat, lon)
@@ -142,19 +150,66 @@ def register_details_modal_callbacks(app):
         else:
             return html.Span("Not Visible")
 
+    @app.callback(
+        Output("visibility-pass-list", "children"),
+        Input("predict-days-slider", "value"),
+        State("selected-sat-id", "data"),
+        State("details-lat-input", "value"),
+        State("details-lon-input", "value"),
+    )
+    def update_event_list(days, sat_id, lat, lon):
+        if not sat_id:
+            return no_update
+
+        logger.info("building event list")
+        lookup = get_satellite_lookup()
+        sat = lookup[sat_id]
+        eph = load(ephemeris_path)
+
+        t0 = ts.now()
+        t1 = ts.utc((t0.utc_datetime() + timedelta(days=days)))
+
+        if lat is None or lon is None:
+            return html.Span("Enter coordinates", style={"color": "#aaa"})
+
+        observer = wgs84.latlon(lat, lon)
+
+        logger.info("calculating event times")
+        times, events = sat.find_events(observer, t0, t1, altitude_degrees=0)
+        event_names = 'rise above 0°', 'culminate', 'set below 0°'
+        sunlit = sat.at(times).is_sunlit(eph)
+
+        rows = []
+        logger.info("populating table")
+        for t, event, sunlit_flag in zip(times, events, sunlit):
+            name = event_names[event]
+            # state = ('in shadow', 'in sunlight')[sunlit_flag]
+
+            rows.append({
+                "time": t.utc_strftime("%Y-%m-%d %H:%M:%S"),
+                "event": name,
+                "sunlit": "Yes" if sunlit_flag else "No"
+            })
+
+        df = pd.DataFrame(rows)
+        logger.info("returning events")
+        if df.empty:
+            return html.Div("No events in this period.", style={"color": "#aaa"})
+
+        return dbc.Table.from_dataframe(df, striped=True, bordered=False, hover=True, size="sm")
 
     @app.callback(
         Output("predicted-position", "children"),
-        Output("globe-graph", "figure", allow_duplicate=True),
-        Output("map-graph", "figure", allow_duplicate=True),
+        Output("details-globe-graph", "figure", allow_duplicate=True),
+        Output("details-map-graph", "figure", allow_duplicate=True),
         Output("prediction-datetime", "data"),
         Input("predict-btn", "n_clicks"),
         State("predict-date", "date"),
         State("predict-time", "value"),
         State("predict-timezone", "value"),
         State("selected-sat-id", "data"),
-        State("globe-graph", "figure"),
-        State("map-graph", "figure"),
+        State("details-globe-graph", "figure"),
+        State("details-map-graph", "figure"),
         prevent_initial_call=True
     )
     def predict_future_position(n_clicks, date_str, time_str, timezone, sat_id, globe_fig, map_fig):
@@ -185,12 +240,14 @@ def register_details_modal_callbacks(app):
         # print(dt)
         t = ts.utc(dt)
 
+        logger.info(f"calculating position of sat (id: {sat_id} at {dt}")
         lookup = get_satellite_lookup()
         sat = lookup.get(sat_id)
         if not sat:
             return html.Span("Satellite not found.", style={"color": "orange"}), globe_fig, map_fig
 
         geocentric = sat.at(t)
+        x, y, z = geocentric.xyz.km
         subpoint = wgs84.subpoint(geocentric)
 
         lat = subpoint.latitude.degrees
@@ -199,16 +256,21 @@ def register_details_modal_callbacks(app):
         # print(f"new position: {lat}, {lon}, {alt}")
 
         result_text = html.Div([
-            html.H6("Predicted Position:"),
-            html.P([
-                f"Latitude: {lat:.3f}°",
-                html.Br(),
-                f"Longitude: {lon:.3f}°",
-                html.Br(),
-                f"Altitude: {alt:.1f} km"
+            html.H5("Predicted Position:"),
+            dbc.Row([
+                dbc.Col(build_field("Latitude (°)", lat), width=3),
+                dbc.Col(build_field("Longitude (°)", lon), width=3),
+                dbc.Col(build_field("Altitude (km)", alt), width=3),
+            ]),
+            dbc.Row([
+                dbc.Col(build_field("X", x), width=3),
+                dbc.Col(build_field("Y", y), width=3),
+                dbc.Col(build_field("Z", z), width=3)
             ])
+
         ])
 
+        logger.info("updating charts")
         globe_fig = Globe_Component.update_prediction_marker(globe_fig, sat_id, dt)
         map_fig = Map_Component.update_prediction_marker(map_fig, sat_id, dt)
 
@@ -216,11 +278,11 @@ def register_details_modal_callbacks(app):
 
 
     @app.callback(
-        Output("globe-graph", "figure", allow_duplicate=True),
-        Output("map-graph", "figure", allow_duplicate=True),
+        Output("details-globe-graph", "figure", allow_duplicate=True),
+        Output("details-map-graph", "figure", allow_duplicate=True),
         Input("path-switch", "on"),
-        State("globe-graph", "figure"),
-        State("map-graph", "figure"),
+        State("details-globe-graph", "figure"),
+        State("details-map-graph", "figure"),
         State("selected-sat-id", "data"),
         State("prediction-datetime", "data"),
         prevent_initial_call=True
@@ -239,6 +301,7 @@ def register_details_modal_callbacks(app):
         :return: the map component and the globe component
         """
         if path_switch:
+            logger.info("showing path")
             if not prediction_datetime:
                 prediction_datetime = datetime.now().astimezone()
 
@@ -251,15 +314,13 @@ def register_details_modal_callbacks(app):
             globe_fig = Globe_Component.show_path(globe_fig, sat_id, minutes_diff)
             map_fig = Map_Component.show_path(map_fig, sat_id, minutes_diff)
         else:
-            print("hide path")
+            logger.info("hide path")
             globe_fig = Globe_Component.clear_path(globe_fig)
             map_fig = Map_Component.clear_path(map_fig)
 
         return globe_fig, map_fig
 
-    """
-    TODO: fix this so it adjusts to different sized screens
-    """
+
     def build_satellite_details_layout(sat_obj):
         """
         Builds an HTML component which displays the details of the selected satellite, including calculating its current
@@ -268,8 +329,10 @@ def register_details_modal_callbacks(app):
         :param sat_obj: the selected EarthSatellite object
         :return: an HTML component
         """
+        logger.info("building details fields")
         t = ts.now()
         geocentric = sat_obj.at(t)
+        x, y, z = geocentric.xyz.km
         subpoint = wgs84.subpoint(geocentric)
 
         lat = round(subpoint.latitude.degrees, 3)
@@ -286,55 +349,56 @@ def register_details_modal_callbacks(app):
             children=[
                 dbc.Row([
                     build_field("NORAD catalog number", sat_obj.model.satnum),
+                    build_field("Epoch datetime(UTC)", sat_obj.epoch.utc_datetime()),
                 ], justify="center"),
                 dbc.Row([
                     dbc.Col([
                         build_field("Classification", sat_obj.model.classification),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                     dbc.Col([
                         build_field("International Designator", sat_obj.model.intldesg),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                     dbc.Col([
                         build_field("Epoch", f"{sat_obj.model.epochyr}{sat_obj.model.epochdays}"),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("1st Derivative of Mean Motion (rev/day)", sat_obj.model.ndot),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("2nd Derivative of Mean Motion (rev^3/day)", sat_obj.model.nddot),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("Ballistic Drag Coefficient", sat_obj.model.bstar),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("Ephemiris Type", sat_obj.model.ephtype),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                     dbc.Col([
                         build_field("Element Set Number", sat_obj.model.elnum),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                 ], justify="center"),
                 dbc.Row([
                     dbc.Col([
                         build_field("Inclination (°)", sat_obj.model.inclo),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("RAAN (°)", sat_obj.model.nodeo),
-                    ], width=2),
+                    ], xs=6, sm=3, md=2, lg=1),
                     dbc.Col([
                         build_field("Eccentricity", sat_obj.model.ecco),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                     dbc.Col([
                         build_field("Argument of Perigee (°)", sat_obj.model.argpo),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("Mean Anomaly (°)", sat_obj.model.mo),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("Mean Motion (°/minute)", sat_obj.model.no_kozai),
-                    ], width=2),
+                    ], xs=8, sm=4, md=3, lg=2),
                     dbc.Col([
                         build_field("Revolutions at Epoch", sat_obj.model.revnum),
-                    ], width=1),
+                    ], xs=6, sm=3, md=2, lg=1),
                 ], justify="center"),
 
                 html.Hr(style={"margin": "20px 0", "borderColor": "#333"}),
@@ -346,6 +410,11 @@ def register_details_modal_callbacks(app):
                         dbc.Col(build_field("Latitude (°)", lat), width=3),
                         dbc.Col(build_field("Longitude (°)", lon), width=3),
                         dbc.Col(build_field("Altitude (km)", alt), width=3),
+                    ]),
+                    dbc.Row([
+                        dbc.Col(build_field("X", x), width=3),
+                        dbc.Col(build_field("Y", y), width=3),
+                        dbc.Col(build_field("Z", z), width=3)
                     ])
                 ], style={"textAlign": "center"}),
             ]

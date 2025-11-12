@@ -1,7 +1,12 @@
 import dash_bootstrap_components as dbc
 from dash import html, dcc
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 def create_export_modal():
+    logger.info("Building Export Modal layout")
     return dbc.Modal(
         id="export-modal",
         is_open=False,
