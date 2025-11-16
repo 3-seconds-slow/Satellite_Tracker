@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import pytz, logging
-from dash import Input, Output, State, html, ctx, no_update
+from dash import Input, Output, State, html, ctx, no_update, dcc
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
 from skyfield.api import wgs84, load
@@ -8,11 +8,12 @@ import pandas as pd
 from Models.Database import get_satellite_lookup
 from Visualisations import Map_Component, Globe_Component
 
+
 ts = load.timescale()
 ephemeris_path = "assets/de421.bsp"
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 def register_details_modal_callbacks(app):
     """
@@ -152,6 +153,7 @@ def register_details_modal_callbacks(app):
 
     @app.callback(
         Output("visibility-pass-list", "children"),
+        Output("event-store", "data"),
         Input("predict-days-slider", "value"),
         State("selected-sat-id", "data"),
         State("details-lat-input", "value"),
@@ -186,17 +188,39 @@ def register_details_modal_callbacks(app):
             # state = ('in shadow', 'in sunlight')[sunlit_flag]
 
             rows.append({
-                "time": t.utc_strftime("%Y-%m-%d %H:%M:%S"),
-                "event": name,
-                "sunlit": "Yes" if sunlit_flag else "No"
+                "Time (UTC)": t.utc_strftime("%Y-%m-%d %H:%M:%S"),
+                "Event": name,
+                "Sunlit": "Yes" if sunlit_flag else "No"
             })
 
         df = pd.DataFrame(rows)
+        csv_string = df.to_csv(index=False)
         logger.info("returning events")
         if df.empty:
-            return html.Div("No events in this period.", style={"color": "#aaa"})
+            return html.Div("No events in this period.", style={"color": "#aaa"}), None
 
-        return dbc.Table.from_dataframe(df, striped=True, bordered=False, hover=True, size="sm")
+        table = dbc.Table.from_dataframe(df, striped=True, bordered=False, hover=True, size="sm")
+        export_btn = dbc.Button(
+            "Export to CSV",
+            id="export-events-btn",
+            color="primary",
+            className="mt-3 w-100"
+        )
+        return html.Div([table, export_btn]), csv_string
+
+    @app.callback(
+        Output("events-export", "data"),
+        Input("export-events-btn", "n_clicks"),
+        State("event-store", "data"),
+        prevent_initial_call=True,
+    )
+    def export_events(n, csv_string):
+        if not csv_string:
+            return None
+
+
+        return csv_string
+
 
     @app.callback(
         Output("predicted-position", "children"),
@@ -444,4 +468,25 @@ def register_details_modal_callbacks(app):
                 })
             ]
         )
+
+
+    '''
+        The clientside_callback is used to execute a javascript function in the user's browser. In this case, the browser is 
+        the PyWebview that the dash app is running in, and the function passes the contents of the file to be saved to the
+        save_file api located in the main file.  
+        '''
+    app.clientside_callback(
+        """
+        function(content) {
+            if (!content) return;
+            
+            filename = "events.csv"
+            filetypes = ("CSV Files (#.csv)", "Text Files (*.txt)")
+            window.pywebview.api.save_file(content, filename, filetypes);
+            return null;
+        }
+        """,
+        Output("events-export", "clear"),
+        Input("events-export", "data")
+    )
 

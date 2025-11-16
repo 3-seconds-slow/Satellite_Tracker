@@ -51,6 +51,8 @@ def create_details_modal():
                 ]),
 
                 html.Div(id="visibility-pass-list", style={"marginTop": "15px"}),
+                dcc.Store(id="event-store"),
+                dcc.Download(id="events-export"),
 
                 html.Hr(),
 

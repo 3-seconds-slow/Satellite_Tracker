@@ -77,8 +77,10 @@ def register_export_modal_callbacks(app):
         """
         function(content) {
             if (!content) return;
-
-            window.pywebview.api.save_file(content);
+            
+            filename = "satellites.txt"
+            filetypes = ("Text Files (*.txt)")
+            window.pywebview.api.save_file(content, filename, filetypes);
             return null;
         }
         """,
