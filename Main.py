@@ -17,7 +17,7 @@ logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(me
 
 
 class API:
-    def save_file(self, content, filename, filetypes):
+    def save_file(self, content, filename):
         """
         This function is used to access the save file dialog for exporting files. PyWebView doesn't expose the apis
         used for downloading files, so to transfer files from the dash app to the local storage I use the clientside_callback
@@ -32,7 +32,7 @@ class API:
         result = window.create_file_dialog(
             webview.FileDialog.SAVE,
             save_filename=filename,
-            file_types=filetypes
+            file_types=("Text Files (*.txt)", "All Files (*.*)")
         )
 
         if result and len(result) > 0:
@@ -61,7 +61,6 @@ def run_dash():
     background_callback_manager = DiskcacheManager(cache)
     logger.info("Initializing Dash")
     app = Dash(__name__, background_callback_manager=background_callback_manager)
-    # app.scripts.config.serve_locally = False
     app.layout = create_home_screen(satellites)
 
     logger.info("Registering callbacks")

@@ -23,12 +23,10 @@ def create_details_modal():
             dbc.ModalHeader(dbc.ModalTitle(id="details-title")),
             dbc.ModalBody([
 
-                # ✅ The dynamic satellite details insert goes here
                 html.Div(id="satellite-details-body"),
 
                 html.Hr(),
 
-                # ✅ Visibility calculation UI (always present)
                 html.Div(
                     className="d-flex justify-content-center align-items-center gap-2 mb-3",
                     children=[
@@ -53,6 +51,13 @@ def create_details_modal():
                 html.Div(id="visibility-pass-list", style={"marginTop": "15px"}),
                 dcc.Store(id="event-store"),
                 dcc.Download(id="events-export"),
+                dbc.Button(
+                    "Export to CSV",
+                    id="export-events-btn",
+                    color="primary",
+                    className="mt-3 w-100",
+                    style={"visibility": "hidden"}
+                ),
 
                 html.Hr(),
 

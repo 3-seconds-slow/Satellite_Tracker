@@ -67,6 +67,14 @@ def register_download_modal_callbacks(app):
         prevent_initial_call=True
     )
     def start_download(set_progress, n_clicks, field, term):
+        """
+        Manages the download and save to database process. Also responsible for updating the progres bar
+        :param set_progress: a function that update the progress bar
+        :param n_clicks: property that detects the download button clicks
+        :param field: search field string
+        :param term: search term string
+        :return:
+        """
         logger.info("starting download")
         try:
             set_progress((1, 3))

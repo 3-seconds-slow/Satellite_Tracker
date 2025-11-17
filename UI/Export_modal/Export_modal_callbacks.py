@@ -4,7 +4,7 @@ from Models.Database import get_satellite_data
 import logging
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 def register_export_modal_callbacks(app):
     """
@@ -78,9 +78,8 @@ def register_export_modal_callbacks(app):
         function(content) {
             if (!content) return;
             
-            filename = "satellites.txt"
-            filetypes = ("Text Files (*.txt)")
-            window.pywebview.api.save_file(content, filename, filetypes);
+            let filename = "satellites.txt";
+            window.pywebview.api.save_file(content, filename);
             return null;
         }
         """,
