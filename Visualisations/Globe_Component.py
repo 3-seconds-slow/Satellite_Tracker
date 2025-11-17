@@ -10,7 +10,7 @@ texture_path = "assets/Earth.jpg"
 EARTH_RADIUS_KM = 6371.0
 ts = load.timescale()
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 
 def create_globe_chart():
@@ -127,7 +127,12 @@ def load_earth_mesh(radius=EARTH_RADIUS_KM, lat_res=200, lon_res=None):
 
     # Load texture (RGB)
     logger.info("loading texture")
-    img = Image.open(texture_path).convert("RGB")
+    try:
+        img = Image.open(texture_path).convert("RGB")
+    except Exception as e:
+        logger.error(e)
+        raise Exception("Could not load texture", e)
+
     tex = np.asarray(img) / 255.0
     tex_h, tex_w, _ = tex.shape
 

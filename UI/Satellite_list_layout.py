@@ -133,7 +133,7 @@ def create_home_screen(satellites):
                 html.Div(
                     className="d-flex gap-2 align-items-end mb-3",
                     children=[
-                        dbc.Button("Download New Data", id="open-download-modal", color="success", className="mt-2"),
+                        dbc.Button("Download Satellite Data", id="open-download-modal", color="success", className="mt-2"),
                         dbc.Button("Import From File", id="open-import-modal", color="success", className="mt-2"),
                         dbc.Button("Export Data", id="open-export-modal", color="success", className="mt-2"),
                         create_download_modal(),

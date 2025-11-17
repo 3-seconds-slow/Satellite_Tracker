@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import pytz, logging
-from dash import Input, Output, State, html, ctx, no_update
+from dash import Input, Output, State, html, ctx, no_update, dcc
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
 from skyfield.api import wgs84, load
@@ -8,11 +8,12 @@ import pandas as pd
 from Models.Database import get_satellite_lookup
 from Visualisations import Map_Component, Globe_Component
 
+
 ts = load.timescale()
 ephemeris_path = "assets/de421.bsp"
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 def register_details_modal_callbacks(app):
     """
@@ -30,6 +31,8 @@ def register_details_modal_callbacks(app):
         Output("details-auto-calc", "data"),
         Output("details-globe-graph", "figure"),
         Output("details-map-graph", "figure"),
+        Output("visibility-pass-list", "children"),
+        Output("export-events-btn", "style"),
         Input("table_listener", "event"),
         State("satellite-table", "derived_virtual_data"),
         State("satellite-table", "active_cell"),
@@ -88,12 +91,15 @@ def register_details_modal_callbacks(app):
                 lon_from_main_screen,
                 auto_calc,
                 globe_chart,
-                map_chart)
+                map_chart,
+                [],
+                {"visibility": "hidden"})
 
 
     # --- Close modal ---
     @app.callback(
         Output("satellite-details-modal", "is_open", allow_duplicate=True),
+        Output("export-events-btn", "style", allow_duplicate=True),
         Input("close-details-modal", "n_clicks"),
         prevent_initial_call=True
     )
@@ -103,11 +109,11 @@ def register_details_modal_callbacks(app):
         :param n_close_clicks: n_click property of the close modal button
         """
         logger.info("closing details")
-        return False
+        return False, {"visibility": "hidden"}
 
     @app.callback(
         Output("details-visible-result", "children"),
-        [Input("details-calc-btn", "n_clicks"),  # manual trigger
+        [Input("details-calc-btn", "n_clicks"),
         Input("satellite-details-modal", "is_open"),],
         [State("details-lat-input", "value"),
         State("details-lon-input", "value"),
@@ -151,13 +157,30 @@ def register_details_modal_callbacks(app):
             return html.Span("Not Visible")
 
     @app.callback(
-        Output("visibility-pass-list", "children"),
+        Output("visibility-pass-list", "children", allow_duplicate=True),
+        Output("event-store", "data"),
+        Output("export-events-btn", "style", allow_duplicate=True),
         Input("predict-days-slider", "value"),
         State("selected-sat-id", "data"),
         State("details-lat-input", "value"),
         State("details-lon-input", "value"),
+        prevent_initial_call=True
     )
     def update_event_list(days, sat_id, lat, lon):
+        """
+        Calculates all the times a given satellite rises more than 10 degrees over the horizon, when culminates, and
+        when it sets below 10 degrees above the horizon for an observer at a given location during a given number of
+        days.
+
+        These events are added to a pandas dataframe, which is then displayed as table in the details modal, and a csv
+        string containing the data is added to the data store
+        :param days: an int representing the number of days to calculate
+        :param sat_id: the id number of the selected satellite
+        :param lat: the latitude of the observer
+        :param lon: the longitude of the observer
+        :return: a html div containing the table of events. Also stores a csv string of the data and makes the export
+        button visible
+        """
         if not sat_id:
             return no_update
 
@@ -175,8 +198,8 @@ def register_details_modal_callbacks(app):
         observer = wgs84.latlon(lat, lon)
 
         logger.info("calculating event times")
-        times, events = sat.find_events(observer, t0, t1, altitude_degrees=0)
-        event_names = 'rise above 0°', 'culminate', 'set below 0°'
+        times, events = sat.find_events(observer, t0, t1, altitude_degrees=10)
+        event_names = 'rise above 10 degrees', 'culminate', 'set below 10 degrees'
         sunlit = sat.at(times).is_sunlit(eph)
 
         rows = []
@@ -186,17 +209,39 @@ def register_details_modal_callbacks(app):
             # state = ('in shadow', 'in sunlight')[sunlit_flag]
 
             rows.append({
-                "time": t.utc_strftime("%Y-%m-%d %H:%M:%S"),
-                "event": name,
-                "sunlit": "Yes" if sunlit_flag else "No"
+                "Time (UTC)": t.utc_strftime("%Y-%m-%d %H:%M:%S"),
+                "Event": name,
+                "Sunlit": "Yes" if sunlit_flag else "No"
             })
 
         df = pd.DataFrame(rows)
+        csv_string = df.to_csv(index=False)
         logger.info("returning events")
         if df.empty:
-            return html.Div("No events in this period.", style={"color": "#aaa"})
+            return html.Div("No events in this period.", style={"color": "#aaa"}), None
 
-        return dbc.Table.from_dataframe(df, striped=True, bordered=False, hover=True, size="sm")
+        table = dbc.Table.from_dataframe(df, striped=True, bordered=False, hover=True, size="sm")
+
+        return html.Div([table]), csv_string, {"visibility": "visible"}
+
+    @app.callback(
+        Output("events-export", "data"),
+        Input("export-events-btn", "n_clicks"),
+        State("event-store", "data"),
+        prevent_initial_call=True,
+    )
+    def export_events(n, csv_string):
+        """
+        sends the csv string to the clientside callback to be exported when the export button is clicked
+        :param n: property for detecting when the button has be clicked
+        :param csv_string: a string containing the even table in csv format
+        :return: the csv string of the data
+        """
+        if not n:
+            raise PreventUpdate
+
+        return csv_string
+
 
     @app.callback(
         Output("predicted-position", "children"),
@@ -403,7 +448,6 @@ def register_details_modal_callbacks(app):
 
                 html.Hr(style={"margin": "20px 0", "borderColor": "#333"}),
 
-                # Computed info (lat/lon/alt/visibility)
                 html.Div([
                     html.H5("Current Position", style={"color": "#2a9df4"}),
                     dbc.Row([
@@ -444,4 +488,24 @@ def register_details_modal_callbacks(app):
                 })
             ]
         )
+
+
+    '''
+        The clientside_callback is used to execute a javascript function in the user's browser. In this case, the browser is 
+        the PyWebview that the dash app is running in, and the function passes the contents of the file to be saved to the
+        save_file api located in the main file.  
+        '''
+    app.clientside_callback(
+        """
+        function(content) {
+            if (!content) return;
+            
+            let filename = "events.csv";
+            window.pywebview.api.save_file(content, filename);
+            return null;
+        }
+        """,
+        Output("events-export", "clear"),
+        Input("events-export", "data")
+    )
 

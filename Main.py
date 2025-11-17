@@ -1,8 +1,7 @@
 import sys, threading, webview, logging
 from dash import Dash, DiskcacheManager
 import diskcache
-from Models import Database
-from Models.Database import get_satellite_list
+from Models.Database import get_satellite_list, create_database
 from UI.Satellite_list_layout import create_home_screen
 from UI.Satellite_list_callbacks import register_home_screen_callbacks
 from UI.Download_modal.Download_modal_callbacks import register_download_modal_callbacks
@@ -14,11 +13,11 @@ from UI.Delete_modal.Delete_modal_callbacks import register_delete_modal_callbac
 
 testing = False #True: use an in memory database for testing.   False: use a file based DB
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 
 class API:
-    def save_file(self, content):
+    def save_file(self, content, filename):
         """
         This function is used to access the save file dialog for exporting files. PyWebView doesn't expose the apis
         used for downloading files, so to transfer files from the dash app to the local storage I use the clientside_callback
@@ -31,9 +30,9 @@ class API:
 
         logger.info("opening file dialog")
         result = window.create_file_dialog(
-            webview.SAVE_DIALOG,
-            save_filename="satellites.tle",
-            file_types=("TLE Files (*.tle)", "Text Files (*.txt)")
+            webview.FileDialog.SAVE,
+            save_filename=filename,
+            file_types=("Text Files (*.txt)", "All Files (*.*)")
         )
 
         if result and len(result) > 0:
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     The database is created here, a thread to run the dash app is started, and the program window is opened
     """
     logger.info("Starting program")
-    Database.create_database(testing)
+    create_database(testing)
     t = threading.Thread(target=run_dash, daemon=True)
     t.start()
 

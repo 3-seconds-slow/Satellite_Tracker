@@ -4,7 +4,7 @@ import requests, logging
 from Models import Database
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(filename="log.txt", format='%(asctime)s - %(levelname)s:%(message)s', level=logging.ERROR)
 
 def register_download_modal_callbacks(app):
     """
@@ -14,7 +14,9 @@ def register_download_modal_callbacks(app):
     """
 
     @app.callback(
-        Output("download-modal", "is_open"),
+        [Output("download-modal", "is_open"),
+         Output("search-term", "value"),
+         Output("download-status-text", "is_open"),],
         [Input("open-download-modal", "n_clicks"),
          Input("cancel-btn", "n_clicks")],
         State("download-modal", "is_open"),
@@ -22,8 +24,8 @@ def register_download_modal_callbacks(app):
     )
     def toggle_modal(open_click, cancel_click, is_open):
         if ctx.triggered_id == "open-download-modal":
-            return True
-        return False
+            return True, "", ""
+        return False, "", ""
 
 
     @app.callback(
@@ -44,7 +46,7 @@ def register_download_modal_callbacks(app):
 
     @app.callback(
         Output("download-status-text", "children"),
-        Output("download-status-text", "is_open"),
+        Output("download-status-text", "is_open", allow_duplicate=True),
         Output("db-refresh-signal", "data"),
         Input("download-btn", "n_clicks"),
         State("search-field", "value"),
@@ -65,6 +67,14 @@ def register_download_modal_callbacks(app):
         prevent_initial_call=True
     )
     def start_download(set_progress, n_clicks, field, term):
+        """
+        Manages the download and save to database process. Also responsible for updating the progres bar
+        :param set_progress: a function that update the progress bar
+        :param n_clicks: property that detects the download button clicks
+        :param field: search field string
+        :param term: search term string
+        :return:
+        """
         logger.info("starting download")
         try:
             set_progress((1, 3))
